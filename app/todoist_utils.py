@@ -88,7 +88,7 @@ def get_labels_data():
         "sync_token": "*",
         "resource_types": '["labels"]'
     }
-    response = requests.post(API_URL_SYNC, headers=headers, data=data)
+    response = requests.post(API_URL_SYNC, headers=headers, data=data)  # Добавляем запрос
     response.raise_for_status()
     data = response.json()
     labels = data.get('labels', [])
@@ -112,6 +112,11 @@ def completed_task_statistics(n_days=7, project_name=None):
         report += "— По проектам:\n"
         for _, row in tasks_per_project.iterrows():
             report += f"  Проект '{row['project_name']}': {row['task_id']} задач(и)\n"
+
+        # Добавим конкретные задачи в отчет
+        report += "\n— Список выполненных задач:\n"
+        for _, task in completed_tasks.iterrows():
+            report += f"  - {task['content']} (выполнено: {task['completed_at']})\n"
 
     return report
 
@@ -158,6 +163,13 @@ def overdue_tasks_statistics(project_name=None, label_name=None):
 
     total_overdue = len(overdue_tasks)
     report = f"— Просроченные задачи: {total_overdue}\n"
+
+    # Если есть просроченные задачи, выведем их список
+    if total_overdue > 0:
+        report += "\n— Список просроченных задач:\n"
+        for _, task in overdue_tasks.iterrows():
+            report += f"  - {task['content']} (дедлайн был: {task['due']['date']})\n"
+
     return report
 
 def productivity_recommendations(n_days=7, project_name=None):
@@ -167,6 +179,9 @@ def productivity_recommendations(n_days=7, project_name=None):
     
     # Так как 'priority' отсутствует, даем общую рекомендацию
     recommendation = "Рекомендация: Продолжайте следить за приоритетами задач и стараться выполнять самые важные в первую очередь."
+
+    if len(completed_tasks) == 0:
+        recommendation += "\n— На данный момент нет выполненных задач. Попробуйте сосредоточиться на небольших, но важных задачах для повышения продуктивности."
 
     return recommendation
 
@@ -213,6 +228,13 @@ def tasks_due_soon(days=3, project_name=None, label_name=None):
 
     total_due_soon = len(due_soon_tasks)
     report = f"— Задачи, срок выполнения которых истекает в ближайшие {days} дней: {total_due_soon}\n"
+
+    # Выведем список задач с ближайшим сроком выполнения
+    if total_due_soon > 0:
+        report += "\n— Список задач с ближайшим дедлайном:\n"
+        for _, task in due_soon_tasks.iterrows():
+            report += f"  - {task['content']} (дедлайн: {task['due']['date']})\n"
+
     return report
 
 def generate_custom_report(n_days=7, project_name=None):

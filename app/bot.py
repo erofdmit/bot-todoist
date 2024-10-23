@@ -3,12 +3,12 @@ import logging
 from aiogram import Bot, Dispatcher, types
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import Message, KeyboardButton, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, KeyboardButton, ReplyKeyboardMarkup
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram import Router
-from todoist_utils import generate_custom_report, get_completed_tasks, get_labels_data, get_project_data
+from todoist_utils import generate_custom_report, get_labels_data, get_project_data
 from dotenv import load_dotenv
 import os
 from datetime import datetime, timedelta
@@ -36,6 +36,8 @@ class TaskReportState(StatesGroup):
     waiting_for_project_selection = State()
     waiting_for_label_selection = State()
     waiting_for_manual_dates = State()
+    waiting_for_start_date = State()
+    waiting_for_end_date = State()
 
 # Клавиатура для выбора количества дней
 def days_keyboard():
@@ -60,6 +62,12 @@ def labels_keyboard():
     keyboard = ReplyKeyboardMarkup(keyboard=[buttons], resize_keyboard=True, row_width=1)
     return keyboard
 
+# Функция для отправки длинных сообщений
+async def send_long_message(chat_id: int, text: str, bot: Bot, chunk_size: int = 4096):
+    """Функция для отправки длинных сообщений по частям."""
+    for chunk in [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]:
+        await bot.send_message(chat_id, chunk)
+
 # Команда /start — приветственное сообщение
 @router.message(Command(commands=["start"]))
 async def start_command(message: Message):
@@ -76,7 +84,8 @@ async def help_command(message: Message):
         "/tasks - Получить отчет о задачах за последние N дней.\n"
         "/tasks_by_project - Получить отчет по проекту.\n"
         "/tasks_by_label - Получить отчет по лейблу.\n"
-        "/full_report - Получить полную статистику за 30 дней."
+        "/full_report - Получить полную статистику за 30 дней.\n"
+        "/custom_report - Настроить и получить кастомный отчет."
     )
     await message.answer(help_text)
 
@@ -97,7 +106,7 @@ async def process_days_input(message: Message, state: FSMContext):
     if message.text in days_mapping:
         days = days_mapping[message.text]
         report = generate_custom_report(n_days=days)
-        await message.answer(report, parse_mode=ParseMode.MARKDOWN)
+        await send_long_message(message.chat.id, report, bot)
         await state.clear()
     elif message.text == "Ввести вручную":
         await message.answer("Введите количество дней вручную:")
@@ -105,7 +114,7 @@ async def process_days_input(message: Message, state: FSMContext):
         try:
             days = int(message.text)
             report = generate_custom_report(n_days=days)
-            await message.answer(report, parse_mode=ParseMode.MARKDOWN)
+            await send_long_message(message.chat.id, report, bot)
             await state.clear()
         except ValueError:
             await message.answer("Пожалуйста, введите корректное число.")
@@ -121,7 +130,7 @@ async def process_project_selection(message: Message, state: FSMContext):
     if message.text in PROJECTS:
         project_name = message.text
         report = generate_custom_report(project_name=project_name)
-        await message.answer(report, parse_mode=ParseMode.MARKDOWN)
+        await send_long_message(message.chat.id, report, bot)
         await state.clear()
     else:
         await message.answer("Выберите корректный проект.")
@@ -137,7 +146,7 @@ async def process_label_selection(message: Message, state: FSMContext):
     if message.text in LABELS:
         label_name = message.text
         report = generate_custom_report(label_name=label_name)
-        await message.answer(report, parse_mode=ParseMode.MARKDOWN)
+        await send_long_message(message.chat.id, report, bot)
         await state.clear()
     else:
         await message.answer("Выберите корректный лейбл.")
@@ -146,7 +155,7 @@ async def process_label_selection(message: Message, state: FSMContext):
 @router.message(Command(commands=["full_report"]))
 async def full_report_command(message: Message):
     report = generate_custom_report(n_days=30)
-    await message.answer(report, parse_mode=ParseMode.MARKDOWN)
+    await send_long_message(message.chat.id, report, bot)
 
 # Функция для запуска бота
 async def main():
